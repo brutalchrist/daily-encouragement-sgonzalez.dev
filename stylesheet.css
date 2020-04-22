@@ -1,0 +1,17 @@
+.MainBox {
+    padding: 20px;
+    width: 400px;
+}
+
+.Title {
+    font-weight: bold;
+}
+
+.Encouragement {
+    text-align: justify;
+    font-style: italic;
+}
+
+.Encouragement__Error {
+    color: #ff0000;
+}

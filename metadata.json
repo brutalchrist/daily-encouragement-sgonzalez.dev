@@ -1,0 +1,9 @@
+{
+  "name": "Daily Encouragement",
+  "description": "Fragments of Daisaku Ikeda's Writings",
+  "uuid": "daily-encouragement@sgonzalez.dev",
+  "shell-version": [
+    "3.36.1"
+  ],
+  "version": "0.0.1"
+}
