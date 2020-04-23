@@ -1,17 +1,23 @@
 'use strict';
 
-const Gio = imports.gi.Gio;
-const GObject = imports.gi.GObject;
-const St = imports.gi.St;
-const Soup = imports.gi.Soup;
-
-const ExtensionUtils = imports.misc.extensionUtils;
-const Me = ExtensionUtils.getCurrentExtension();
+const { Gio, GLib, GObject, St, Soup } = imports.gi;
 const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
+const Config = imports.misc.config;
+const ExtensionUtils = imports.misc.extensionUtils;
+
+const Me = ExtensionUtils.getCurrentExtension();
+const Gettext = imports.gettext;
+
+Gettext.textdomain('daily-encouragement@sgonzalez-dev');
+Gettext.bindtextdomain(
+    'daily-encouragement@sgonzalez-dev',
+    Me.dir.get_child('locale').get_path()
+);
+
+const _ = Gettext.gettext;
 
 // For compatibility checks, as described above
-const Config = imports.misc.config;
 const SHELL_MINOR = parseInt(Config.PACKAGE_VERSION.split('.')[1]);
 
 const URL = 'https://api.sgonzalez.dev/dailyencouragement';
@@ -20,6 +26,11 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
 
     _init() {
         super._init(St.Side.TOP, `${Me.metadata.name} Indicator`, false);
+
+        this.locale = GLib.get_language_names()[0];
+
+        if (this.locale == 'C')
+            this.locale = 'en';
 
         const iconPath = Me.path + '/images/icon.svg';
         const icon = new St.Icon({
@@ -33,7 +44,7 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
         mainBox.set_vertical(true);
 
         const title = new St.Label({
-            text: _("Aliento diario"),
+            text: _('Daily Encouragement'),
             style_class: 'Title'
         });
 
@@ -45,12 +56,15 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
 
     getDailyEncouragement() {
         const labelProperties = {
-            text: 'Error de conexión',
+            text: _('Connection error'),
             textClass: 'Encouragement__Error'
         }
 
         const sessionSync = new Soup.SessionSync();
-        const msg = Soup.Message.new('GET', URL);
+        const msg = Soup.Message.new(
+            'GET',
+            `${URL}?lang=${this.locale.substring(0,2)}`
+        );
 
         sessionSync.send_message(msg);
 
@@ -95,9 +109,6 @@ function enable() {
 
     dailyEncouragement = new DailyEncouragement();
 
-    // The `main` import is an example of file that is mostly live instances of
-    // objects, rather than reusable code. `Main.panel` is the actual panel you
-    // see at the top of the screen.
     Main.panel.addToStatusArea(`${Me.metadata.name}`, dailyEncouragement);
 }
 
@@ -105,8 +116,6 @@ function enable() {
 function disable() {
     log(`disabling ${Me.metadata.name} version ${Me.metadata.version}`);
 
-    // REMINDER: It's required for extensions to clean up after themselves when
-    // they are disabled. This is required for approval during review!
     if (dailyEncouragement !== null) {
         dailyEncouragement.destroy();
         dailyEncouragement = null;
