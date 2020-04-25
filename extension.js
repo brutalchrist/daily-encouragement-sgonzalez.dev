@@ -30,12 +30,10 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
     _init() {
         super._init(St.Side.TOP, `${Me.metadata.name} Indicator`, false);
 
-        this.locale = GLib.get_language_names()[0];
+        const lang =  GLib.get_language_names()[0];
+        this.locale = (lang === 'C') ? 'en' : lang; 
 
-        if (this.locale == 'C')
-            this.locale = 'en';
-
-        const iconPath = Me.path + '/images/icon.svg';
+        const iconPath = `${Me.path}/images/icon.svg`;
         const icon = new St.Icon({
             gicon: Gio.icon_new_for_string(iconPath),
             style_class: 'system-status-icon'
@@ -47,7 +45,7 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
     }
 
     refreshUI(labelProperties = {}) {
-        const mainBox = new St.BoxLayout({style_class: 'MainBox',});
+        const mainBox = new St.BoxLayout({style_class: 'MainBox'});
         mainBox.set_vertical(true);
 
         const title = new St.Label({
