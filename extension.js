@@ -10,9 +10,9 @@ const Lang = imports.lang;
 const Me = ExtensionUtils.getCurrentExtension();
 const Gettext = imports.gettext;
 
-Gettext.textdomain('daily-encouragement@sgonzalez-dev');
+Gettext.textdomain(Me.metadata.gettext_domain);
 Gettext.bindtextdomain(
-    'daily-encouragement@sgonzalez-dev',
+    Me.metadata.gettext_domain,
     Me.dir.get_child('locale').get_path()
 );
 
