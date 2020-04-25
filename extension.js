@@ -5,6 +5,7 @@ const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const Config = imports.misc.config;
 const ExtensionUtils = imports.misc.extensionUtils;
+const Lang = imports.lang;
 
 const Me = ExtensionUtils.getCurrentExtension();
 const Gettext = imports.gettext;
@@ -21,6 +22,8 @@ const _ = Gettext.gettext;
 const SHELL_MINOR = parseInt(Config.PACKAGE_VERSION.split('.')[1]);
 
 const URL = 'https://api.sgonzalez.dev/dailyencouragement';
+
+let _httpSession;
 
 var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
 
@@ -40,6 +43,10 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
 
         this.add_actor(icon);
 
+        this.getDailyEncouragement();
+    }
+
+    refreshUI(labelProperties = {}) {
         const mainBox = new St.BoxLayout({style_class: 'MainBox',});
         mainBox.set_vertical(true);
 
@@ -49,31 +56,7 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
         });
 
         mainBox.add(title);
-        mainBox.add(this.getDailyEncouragement());
-
         this.menu.box.add(mainBox);
-    }
-
-    getDailyEncouragement() {
-        const labelProperties = {
-            text: _('Connection error'),
-            textClass: 'Encouragement__Error'
-        }
-
-        const sessionSync = new Soup.SessionSync();
-        const msg = Soup.Message.new(
-            'GET',
-            `${URL}?lang=${this.locale.substring(0,2)}`
-        );
-
-        sessionSync.send_message(msg);
-
-        if (msg.status_code === 200) {
-            const json = JSON.parse(msg.response_body.data);
-
-            labelProperties.text = json.encouragement;
-            labelProperties.textClass = '';
-        }
 
         const encouragementLabel = new St.Label({
             style_class: `Encouragement ${labelProperties.textClass}`,
@@ -82,7 +65,41 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
 
         encouragementLabel.clutter_text.line_wrap = true;
 
-        return encouragementLabel;
+        mainBox.add(encouragementLabel);
+    }
+
+    getDailyEncouragement() {
+        const params = { lang: this.locale.substring(0,2) };
+        const message = Soup.form_request_new_from_hash('GET', URL, params);
+
+        _httpSession = new Soup.Session();
+
+        _httpSession.queue_message(
+            message,
+            Lang.bind(this, function (_httpSession, message) {
+                const labelProperties = {
+                    text: _('Connection error'),
+                    textClass: 'Encouragement__Error'
+                }
+
+                if (message.status_code === 200) {
+                    const json = JSON.parse(message.response_body.data);
+
+                    labelProperties.text = json.encouragement;
+                    labelProperties.textClass = '';
+                }
+
+                this.refreshUI(labelProperties);
+            })
+        );
+    }
+
+    stop() {
+        if (_httpSession !== undefined)
+            _httpSession.abort();
+        _httpSession = undefined;
+
+        this.menu.removeAll();
     }
 }
 
@@ -94,15 +111,11 @@ if (SHELL_MINOR > 30) {
     );
 }
 
-// We're going to declare `indicator` in the scope of the whole script so it can
-// be accessed in both `enable()` and `disable()`
 var dailyEncouragement = null;
-
 
 function init() {
     log(`initializing ${Me.metadata.name} version ${Me.metadata.version}`);
 }
-
 
 function enable() {
     log(`enabling ${Me.metadata.name} version ${Me.metadata.version}`);
@@ -112,11 +125,11 @@ function enable() {
     Main.panel.addToStatusArea(`${Me.metadata.name}`, dailyEncouragement);
 }
 
-
 function disable() {
     log(`disabling ${Me.metadata.name} version ${Me.metadata.version}`);
 
     if (dailyEncouragement !== null) {
+        dailyEncouragement.stop();
         dailyEncouragement.destroy();
         dailyEncouragement = null;
     }
