@@ -1,6 +1,6 @@
 'use strict';
 
-const { Gio, GLib, GObject, St, Soup } = imports.gi;
+const { Gio, GLib, GObject, St, Soup, Gtk, Gdk } = imports.gi;
 const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const Config = imports.misc.config;
@@ -58,12 +58,27 @@ var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
 
         const encouragementLabel = new St.Label({
             style_class: `Encouragement ${labelProperties.textClass}`,
-            text: labelProperties.text
+            text: labelProperties.text,
+            reactive: true,
         });
-
+        
         encouragementLabel.clutter_text.line_wrap = true;
 
         mainBox.add(encouragementLabel);
+
+        encouragementLabel.connect(
+            'button-press-event',
+            this._clickHandler.bind(this, labelProperties.text)
+        );
+    }
+
+    _clickHandler(text) {
+        Gtk.Clipboard
+            .get_default(Gdk.Display.get_default())
+            .set_text(text, -1);
+
+        Main.notify(_('Encouragement copied to clipboard'));
+        this.menu.close();
     }
 
     getDailyEncouragement() {
