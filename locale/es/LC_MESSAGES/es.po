@@ -17,10 +17,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:47
+#: extension.js:52
 msgid "Daily Encouragement"
 msgstr "Aliento diario"
 
-#: extension.js:59
+#: extension.js:80
+msgid "Encouragement copied to clipboard"
+msgstr "Aliento copiado al portapapeles"
+
+#: extension.js:94
 msgid "Connection error"
 msgstr "Error de conexión"
