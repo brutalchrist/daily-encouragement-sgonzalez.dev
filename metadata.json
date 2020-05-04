@@ -3,9 +3,10 @@
   "description": "Fragments of Daisaku Ikeda's Writings",
   "uuid": "daily-encouragement@sgonzalez.dev",
   "shell-version": [
-    "3.36.1"
+    "3.36.1",
+    "3.36.2"
   ],
-  "version": "1.0.0",
+  "version": "1.1.0",
   "url": "https://github.com/brutalchrist/daily-encouragement-sgonzalez.dev",
   "gettext_domain": "daily-encouragement@sgonzalez-dev"
 }
