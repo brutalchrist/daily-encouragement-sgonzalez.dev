@@ -1,149 +1,101 @@
-'use strict';
+import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import St from 'gi://St';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 
-const { Gio, GLib, GObject, St, Soup, Gtk, Gdk } = imports.gi;
-const Main = imports.ui.main;
-const PanelMenu = imports.ui.panelMenu;
-const Config = imports.misc.config;
-const ExtensionUtils = imports.misc.extensionUtils;
-const Lang = imports.lang;
+const DailyEncouragementIndicator = GObject.registerClass(
+    { GTypeName: 'DailyEncouragementIndicator' },
+    class DailyEncouragementIndicator extends PanelMenu.Button {
+        _init(extension) {
+            super._init(0.0, extension.metadata.name);
+            this._extension = extension;
 
-const Me = ExtensionUtils.getCurrentExtension();
-const Gettext = imports.gettext;
+            const langName = GLib.get_language_names()[0] || 'en';
+            this.locale = langName.startsWith('es') ? 'es' : 'en';
 
-Gettext.textdomain(Me.metadata.gettext_domain);
-Gettext.bindtextdomain(
-    Me.metadata.gettext_domain,
-    Me.dir.get_child('locale').get_path()
+            const iconPath = `${this._extension.path}/images/icon.svg`;
+            const icon = new St.Icon({
+                gicon: Gio.icon_new_for_string(iconPath),
+                style_class: 'system-status-icon',
+                icon_size: 16
+            });
+            this.add_child(icon);
+
+            this._loadDailyEncouragement();
+        }
+
+        _loadDailyEncouragement() {
+            try {
+                const date = new Date();
+                const monthNames = [
+                    "january", "february", "march", "april", "may", "june",
+                    "july", "august", "september", "october", "november", "december"
+                ];
+                const dateKey = `${monthNames[date.getMonth()]}-${date.getDate()}`;
+
+                const filePath = `${this._extension.path}/data/encouragement-${this.locale}.json`;
+                const file = Gio.File.new_for_path(filePath);
+
+                const [success, contents] = file.load_contents(null);
+                if (!success) throw new Error(`No se pudo leer ${filePath}`);
+
+                const allData = JSON.parse(new TextDecoder().decode(contents));
+                const quote = allData[dateKey] || "No message found for today.";
+
+                this._refreshUI(quote);
+
+            } catch (e) {
+                console.error(`[DailyEncouragement] Error: ${e.message}`);
+                this._refreshUI(_("Error loading local data."));
+            }
+        }
+
+        _refreshUI(text) {
+            this.menu.removeAll();
+            
+            const mainBox = new St.BoxLayout({ 
+                style_class: 'MainBox',
+                vertical: true,
+                style: 'min-width: 250px; padding: 12px;'
+            });
+
+            const title = new St.Label({
+                text: _('Daily Encouragement'),
+                style_class: 'Title',
+                style: 'font-weight: bold; margin-bottom: 8px;'
+            });
+            mainBox.add_child(title);
+
+            const encouragementLabel = new St.Label({
+                text: text,
+                style_class: 'Encouragement',
+                reactive: true,
+            });
+            encouragementLabel.clutter_text.line_wrap = true;
+            mainBox.add_child(encouragementLabel);
+
+            this.menu.box.add_child(mainBox);
+
+            encouragementLabel.connect('button-press-event', () => {
+                St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+                Main.notify(_('Encouragement copied to clipboard'));
+                this.menu.close();
+            });
+        }
+    }
 );
 
-const _ = Gettext.gettext;
-
-// For compatibility checks, as described above
-const SHELL_MINOR = parseInt(Config.PACKAGE_VERSION.split('.')[1]);
-
-const URL = 'https://api.sgonzalez.dev/dailyencouragement';
-
-let _httpSession;
-
-var DailyEncouragement = class DailyEncouragement extends PanelMenu.Button {
-
-    _init() {
-        super._init(St.Side.TOP, `${Me.metadata.name} Indicator`, false);
-
-        const lang =  GLib.get_language_names()[0];
-        this.locale = (lang === 'C') ? 'en' : lang; 
-
-        const iconPath = `${Me.path}/images/icon.svg`;
-        const icon = new St.Icon({
-            gicon: Gio.icon_new_for_string(iconPath),
-            style_class: 'system-status-icon'
-        });
-
-        this.add_actor(icon);
-
-        this.getDailyEncouragement();
+export default class DailyEncouragementExtension extends Extension {
+    enable() {
+        this._indicator = new DailyEncouragementIndicator(this);
+        Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
-    refreshUI(labelProperties = {}) {
-        const mainBox = new St.BoxLayout({style_class: 'MainBox'});
-        mainBox.set_vertical(true);
-
-        const title = new St.Label({
-            text: _('Daily Encouragement'),
-            style_class: 'Title'
-        });
-
-        mainBox.add(title);
-        this.menu.box.add(mainBox);
-
-        const encouragementLabel = new St.Label({
-            style_class: `Encouragement ${labelProperties.textClass}`,
-            text: labelProperties.text,
-            reactive: true,
-        });
-        
-        encouragementLabel.clutter_text.line_wrap = true;
-
-        mainBox.add(encouragementLabel);
-
-        encouragementLabel.connect(
-            'button-press-event',
-            this._clickHandler.bind(this, labelProperties.text)
-        );
-    }
-
-    _clickHandler(text) {
-        Gtk.Clipboard
-            .get_default(Gdk.Display.get_default())
-            .set_text(text, -1);
-
-        Main.notify(_('Encouragement copied to clipboard'));
-        this.menu.close();
-    }
-
-    getDailyEncouragement() {
-        const params = { lang: this.locale.substring(0,2) };
-        const message = Soup.form_request_new_from_hash('GET', URL, params);
-
-        _httpSession = new Soup.Session();
-
-        _httpSession.queue_message(
-            message,
-            Lang.bind(this, function (_httpSession, message) {
-                const labelProperties = {
-                    text: _('Connection error'),
-                    textClass: 'Encouragement__Error'
-                }
-
-                if (message.status_code === 200) {
-                    const json = JSON.parse(message.response_body.data);
-
-                    labelProperties.text = json.encouragement;
-                    labelProperties.textClass = '';
-                }
-
-                this.refreshUI(labelProperties);
-            })
-        );
-    }
-
-    stop() {
-        if (_httpSession !== undefined)
-            _httpSession.abort();
-        _httpSession = undefined;
-
-        this.menu.removeAll();
-    }
-}
-
-// Compatibility with gnome-shell >= 3.32
-if (SHELL_MINOR > 30) {
-    DailyEncouragement = GObject.registerClass(
-        {GTypeName: 'DailyEncouragement'},
-        DailyEncouragement
-    );
-}
-
-var dailyEncouragement = null;
-
-function init() {
-    log(`initializing ${Me.metadata.name} version ${Me.metadata.version}`);
-}
-
-function enable() {
-    log(`enabling ${Me.metadata.name} version ${Me.metadata.version}`);
-
-    dailyEncouragement = new DailyEncouragement();
-
-    Main.panel.addToStatusArea(`${Me.metadata.name}`, dailyEncouragement);
-}
-
-function disable() {
-    log(`disabling ${Me.metadata.name} version ${Me.metadata.version}`);
-
-    if (dailyEncouragement !== null) {
-        dailyEncouragement.stop();
-        dailyEncouragement.destroy();
-        dailyEncouragement = null;
+    disable() {
+        this._indicator?.destroy();
+        this._indicator = null;
     }
 }
